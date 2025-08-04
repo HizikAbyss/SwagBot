@@ -1,0 +1,66 @@
+import os
+import random
+from dotenv import load_dotenv
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+)
+from PIL import Image, ImageDraw, ImageFont
+
+load_dotenv()
+
+TG_TOKEN = os.getenv('TG_TOKEN')
+
+TOKEN = TG_TOKEN  # Replace with your actual bot token
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text('Привет! Отправь мне фото, и я добавлю "LAME" или "SWAG"!')
+
+async def process_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    photo_file = await update.message.photo[-1].get_file()
+    photo_path = 'temp_photo.jpg'
+    await photo_file.download_to_drive(photo_path)
+
+    image = Image.open(photo_path)
+    draw = ImageDraw.Draw(image)
+    text = "SWAG" if random.random() > 0.5 else "LAME"
+
+    try:
+        font = ImageFont.truetype("swag.ttf", 150)
+    except:
+        font = ImageFont.load_default()
+
+    # Get text bounding box (new method)
+    left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+    text_width = right - left
+    text_height = bottom - top
+
+    x = (image.width - text_width) / 2
+    y = (image.height - text_height) / 2
+
+    # Text outline
+    for offset_x, offset_y in [(-2,-2), (2,-2), (-2,2), (2,2)]:
+        draw.text((x + offset_x, y + offset_y), text, font=font, fill="black")
+    draw.text((x, y), text, font=font, fill="white")
+
+    output_path = 'output_photo.jpg'
+    image.save(output_path)
+    await update.message.reply_photo(photo=open(output_path, 'rb'))
+
+    os.remove(photo_path)
+    os.remove(output_path)
+
+def main() -> None:
+    app = Application.builder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND, process_photo))
+
+    app.run_polling()
+
+if __name__ == '__main__':
+    main()
